@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------
+   9Expert Corporate Identity — Design Tokens
+   Brand Blue 60% / Sky + Ice White 30% / Accent Lime 10%
+   ห้ามใช้โทนอุ่น (ส้ม แดง เหลือง อำพัน) ทุกกรณี
+   --------------------------------------------------------------- */
+@theme {
+  /* Brand */
+  --color-brand: #2486FF;        /* Brand Blue   — สีหลัก */
+  --color-brand-deep: #005CFF;   /* Brand Blue เข้ม — hover, ตัวอักษรบนพื้นอ่อน */
+  --color-azure: #48B0FF;        /* Sky Blue     — สีรอง */
+  --color-azure-soft: #CFE7FF;   /* Sky Blue อ่อน — พื้นป้าย */
+  --color-tint: #E9F3FF;         /* พื้นการ์ด, พื้นป้าย */
+  --color-ice: #F8FAFD;          /* Ice White    — พื้นหลังรอง */
+  --color-navy: #0D1B2A;         /* Deep Navy    — ตัวอักษรหลัก */
+  --color-navy-soft: #243549;    /* Deep Navy อ่อน — hover บนพื้น navy */
+
+  /* Accent */
+  --color-zest: #D4F73F;         /* Accent Lime  — ปุ่มยืนยัน, ไฮไลต์ */
+  --color-zest-deep: #B8D930;    /* Accent Lime เข้ม — hover */
+  --color-zest-soft: #EDF9BF;    /* Accent Lime อ่อน — พื้นป้าย */
+  --color-zest-ink: #4F5E00;     /* ตัวอักษรบนพื้น Lime อ่อน */
+
+  /* Neutral */
+  --color-ink-strong: #33404E;   /* ตัวอักษรเนื้อความ */
+  --color-ink: #5A6472;          /* Text Gray — ตัวอักษรรอง */
+  --color-steel: #808A95;        /* Slate — ตัวอักษรจาง */
+  --color-steel-light: #A7B0BA;  /* ตัวอักษรจางมาก, สถานะปิดใช้งาน */
+  --color-line: #DCE7F5;         /* เส้นขอบอ่อน */
+  --color-line-strong: #C4D3E4;  /* เส้นขอบเข้ม */
+  --color-mist: #EDF1F5;         /* พื้นเทาอ่อน */
+}
+
+
+:root {
+  --background: #ffffff;
+  --foreground: #0d1b2a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-noto-thai);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-noto-thai), system-ui, sans-serif;
+}
