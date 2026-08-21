@@ -7,9 +7,10 @@ type Props = {
   expenses: Expense[];
   onEdit: (e: Expense) => void;
   onDelete: (id: number) => void;
+  showOwner?: boolean; // admin และ super admin เห็นของทุกคน จึงต้องรู้ว่าแถวไหนของใคร
 };
 
-export default function ExpenseTable({ expenses, onEdit, onDelete }: Props) {
+export default function ExpenseTable({ expenses, onEdit, onDelete, showOwner = false }: Props) {
   if (expenses.length === 0) {
     return (
       <div className="rounded-xl bg-white p-10 text-center text-steel shadow-sm ring-1 ring-line">
@@ -25,6 +26,7 @@ export default function ExpenseTable({ expenses, onEdit, onDelete }: Props) {
           <tr>
             <th className="px-4 py-3 font-medium">วันที่</th>
             <th className="px-4 py-3 font-medium">หมวด</th>
+            {showOwner && <th className="px-4 py-3 font-medium">เจ้าของ</th>}
             <th className="px-4 py-3 font-medium">บันทึกช่วยจำ</th>
             <th className="px-4 py-3 text-right font-medium">จำนวนเงิน</th>
             <th className="px-4 py-3 text-right font-medium">จัดการ</th>
@@ -39,6 +41,9 @@ export default function ExpenseTable({ expenses, onEdit, onDelete }: Props) {
                   {e.category}
                 </span>
               </td>
+              {showOwner && (
+                <td className="whitespace-nowrap px-4 py-3 text-ink">{e.owner_name || "-"}</td>
+              )}
               <td className="px-4 py-3 text-ink">{e.note || "-"}</td>
               <td className="whitespace-nowrap px-4 py-3 text-right font-medium text-navy">{formatBaht(e.amount)}</td>
               <td className="whitespace-nowrap px-4 py-3 text-right">

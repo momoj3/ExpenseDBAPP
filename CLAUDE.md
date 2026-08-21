@@ -2,27 +2,75 @@
 
 # MyExpense
 
-แอปบันทึกรายจ่ายส่วนตัว ภาษาไทยทั้งแอป ผู้ใช้คนเดียว **ไม่มีระบบ login** และไม่ต้องทำ auth/multi-user
+แอปบันทึกรายจ่ายส่วนตัว ภาษาไทยทั้งแอป **มีระบบ login และสิทธิ์ 3 ระดับ**
 เป็นโปรเจกต์ประกอบคอร์ส 9Expert — โค้ดต้องอ่านง่ายและตรงไปตรงมา เลี่ยง abstraction ที่ไม่จำเป็น
 
 ## Stack
 
-Next.js 16.2.12 (App Router, Turbopack) · React 19.2.4 · TypeScript strict · Tailwind CSS v4 (ผ่าน `@tailwindcss/postcss`)
+Next.js 16.2.12 (App Router, Turbopack) · React 19.2.4 · TypeScript strict · Tailwind CSS v4 (ผ่าน
+`@tailwindcss/postcss`) · Supabase (PostgreSQL) · bcryptjs
 
 Tailwind v4 ไม่มี `tailwind.config.js` — ธีมทั้งหมดอยู่ในบล็อก `@theme` ของ [src/app/globals.css](src/app/globals.css)
+
+## สถาปัตยกรรม — สำคัญที่สุดในไฟล์นี้
+
+```
+เบราว์เซอร์ ──► Server Action / proxy.ts ──► Supabase (SUPABASE_SECRET_KEY)
+              (ตรวจ session cookie ทุกครั้ง)
+```
+
+**เบราว์เซอร์ไม่คุยกับ Supabase ตรงอีกแล้ว** ทุกการอ่านเขียนวิ่งผ่านฝั่ง server ด้วย secret key
+ซึ่งข้าม RLS ได้ ตารางทั้งสามเปิด RLS ไว้แบบไม่มี policy เลย จึงปิดตายไม่ให้ anon key แตะอะไรได้
+
+**กฎที่ห้ามละเมิด:**
+- `src/lib/supabase.ts` มี `import "server-only"` ห้าม import จาก client component
+- ห้ามสร้าง Supabase client ที่อื่นนอกจากไฟล์นั้น
+- ห้ามตั้งชื่อ env ที่เก็บ secret ว่า `NEXT_PUBLIC_*` — Next.js จะฝังลง bundle แล้วรั่วทันที
+- server action **ห้ามรับ `user_id` จาก client** ต้องอ่านจาก session เอง (ค่าจาก client ปลอมได้)
+- proxy ทำแค่ optimistic check จาก cookie ตามที่เอกสาร Next แนะนำ การตรวจสิทธิ์จริงอยู่ใน action ทุกตัว
 
 ## โครงสร้าง
 
 ```
-src/app/layout.tsx        ฟอนต์ Noto Sans Thai + metadata (lang="th")
-src/app/page.tsx          หน้าเดียวของแอป ถือ state ทั้งหมด
-src/app/globals.css       design tokens ของ 9Expert CI
-src/components/           ExpenseForm / ExpenseTable / Filters / CategorySummary
-src/lib/categories.ts     CATEGORIES, CATEGORY_COLOR, formatBaht, today
-src/lib/types.ts          type Expense
-src/lib/validate.ts       กฎตรวจข้อมูลก่อนบันทึก + ข้อความเตือนภาษาไทย
-supabase/                 SQL script สำหรับรันใน Supabase SQL Editor
+src/proxy.ts                    กันหน้าที่ยังไม่ login + ต่ออายุ session (sliding 30 นาที)
+src/app/layout.tsx              ฟอนต์ Noto Sans Thai + metadata (lang="th")
+src/app/page.tsx                server component: อ่าน session แล้วประกอบหน้าหลัก
+src/app/login/                  หน้าเข้าสู่ระบบ
+src/app/register/               หน้าลงทะเบียน (สร้างแบบรออนุมัติ)
+src/app/admin/users/            จัดการบัญชี อนุมัติ เปลี่ยน role รีเซ็ตรหัสผ่าน (super admin)
+src/app/admin/logs/             ประวัติการเข้าระบบ (super admin)
+src/app/globals.css             design tokens ของ 9Expert CI
+
+src/lib/supabase.ts             *** server-only *** จุดเชื่อมต่อฐานข้อมูลจุดเดียว
+src/lib/session-token.ts        เข้ารหัส/ตรวจ session token (ไม่ import next — proxy ใช้ได้)
+src/lib/session.ts              อ่านเขียน session cookie (server-only)
+src/lib/roles.ts                แหล่งเดียวของกฎสิทธิ์ + ชื่อ role ภาษาไทย
+src/lib/auth-rules.ts           ค่าคงที่รหัสผ่าน/เวลา idle (ไฟล์ธรรมดา client ใช้ได้)
+src/lib/auth-actions.ts         login / logout / register
+src/lib/expenses-actions.ts     CRUD รายจ่าย บังคับสิทธิ์ทุกครั้ง
+src/lib/users-actions.ts        จัดการบัญชี + รีเซ็ตรหัสผ่าน (super admin)
+src/lib/categories.ts           CATEGORIES, CATEGORY_COLOR, formatBaht, today
+src/lib/types.ts                Expense, User, LoginLog, Role, SessionUser
+
+src/components/ExpenseApp.tsx   client: state ของหน้าบันทึกรายจ่ายทั้งหมด
+src/components/                 ExpenseForm / ExpenseTable / Filters / CategorySummary
+                                UserBar / IdleLogout / LoginPopup / PasswordInput
+                                UsersManager / EnvNotice / NoPermission
+supabase/                       SQL script สำหรับรันใน Supabase SQL Editor
 ```
+
+## สิทธิ์ 3 ระดับ
+
+| role | เห็นรายจ่าย | จัดการบัญชี |
+|---|---|---|
+| `user` | เฉพาะของตัวเอง | ไม่ได้ |
+| `admin` | ของทุกคน + แก้/ลบได้ | ไม่ได้ |
+| `super_admin` | ของทุกคน + แก้/ลบได้ | อนุมัติ เปลี่ยน role ดูประวัติ รีเซ็ตรหัสผ่านของ `admin`/`user` |
+
+เช็ก role ผ่านฟังก์ชันใน `src/lib/roles.ts` เท่านั้น (`canSeeAllExpenses`, `canManageUsers`,
+`canResetPasswordOf`) **ห้ามเทียบสตริง role ตรง ๆ ที่อื่น**
+
+สมัครเองได้ที่ `/register` แต่ `is_approved` เป็น `false` จึง login ไม่ได้จนกว่า super admin อนุมัติ
 
 ## กติกาที่ต้องรักษา
 
@@ -38,25 +86,40 @@ supabase/                 SQL script สำหรับรันใน Supabase 
 
 **คอมเมนต์ในโค้ด** — เขียนภาษาไทย ตามสไตล์ไฟล์ที่มีอยู่
 
-## ฐานข้อมูล — ยังไม่ได้ต่อ
+**server action** — ไฟล์ที่ประกาศ `"use server"` ทุก export ต้องเป็นฟังก์ชัน `async`
+ค่าคงที่ต้องแยกไปไฟล์ธรรมดา (เหตุที่มี `auth-rules.ts`) · action คืนผลเป็น
+`{ ok: true, ... } | { ok: false, message }` ไม่ throw เพราะ production Next.js จะปิดข้อความ error จริง
 
-ตอนนี้ข้อมูลอยู่ใน `useState` ของ `page.tsx` เท่านั้น **refresh แล้วหาย** ยังไม่มี `@supabase/supabase-js`
-ในโปรเจกต์ และยังไม่มีโค้ดไหนอ่าน env
+## ฐานข้อมูล
 
-`.env.local` มีค่าพร้อมแล้ว (ไม่ถูก commit ตามกติกา `.env*` ใน `.gitignore`) ชื่อตัวแปรที่ต้องใช้:
-`NEXT_PUBLIC_SUPABASE_URL` และ `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-ค่าเดียวกันนี้ต้องไปตั้งเป็น Environment Variables บน Vercel ด้วย ไม่งั้น production จะพัง
+3 ตาราง **เปิด RLS ทั้งหมดโดยไม่มี policy**
 
-ตาราง Supabase เตรียมไว้แล้วที่ [supabase/myexpense-seed.sql](supabase/myexpense-seed.sql) — ตาราง
-`public.expenses` เดียวเท่านั้น ห้ามสร้างตารางอื่น คอลัมน์: `id` (identity, PK), `expense_date` (date,
-not null), `category` (text, not null), `amount` (numeric(12,2), > 0), `note` (text, null ได้),
-`created_at` (timestamptz, default now())
+- `expenses` — `id`, `expense_date`, `category`, `amount` (numeric > 0), `note`, `created_at`,
+  `user_id` (nullable · null คือ 10 แถวแรกที่บันทึกก่อนมีระบบผู้ใช้ เห็นได้เฉพาะ admin ขึ้นไป)
+- `users` — `id`, `username` (unique), `password_hash` (bcrypt), `full_name`, `department`,
+  `role`, `is_approved`, `created_at`
+- `login_logs` — `id`, `user_id`, `username`, `action` (`login`/`logout`/`failed`/`password_reset`),
+  `detail`, `ip`, `user_agent`, `created_at`
 
-จุดที่ต้องระวังเมื่อจะต่อ Supabase:
-- `Expense.id` ในฝั่ง TS เป็น `string` (จาก `crypto.randomUUID()`) แต่ `expenses.id` ใน DB เป็น `bigint` — ต้องเลือกให้ตรงกันก่อน
-- `note` ในฝั่ง TS เป็น `string` (ไม่มี `null`) แต่ DB ยอมให้ `null`
-- script ขึ้นต้นด้วย `DROP TABLE` — ห้ามรันซ้ำหลังเริ่มบันทึกข้อมูลจริง
-- ยังไม่ได้เปิด RLS ตามที่เจ้าของโปรเจกต์สั่งไว้ ถ้าจะขึ้นใช้จริงต้องคุยเรื่องนี้ก่อน
+Script: [supabase/myexpense-seed.sql](supabase/myexpense-seed.sql) (ตาราง expenses — **ขึ้นต้นด้วย
+`DROP TABLE` ห้ามรันซ้ำ**) และ [supabase/myexpense-auth.sql](supabase/myexpense-auth.sql)
+(users + login_logs + เพิ่ม `user_id` — ไม่ลบข้อมูล expenses แต่รันซ้ำไม่ได้)
+
+`amount` เป็น `numeric` PostgREST จึงส่งมาเป็น **ข้อความ** ต้อง `Number()` เสมอ ไม่งั้นการบวกยอด
+จะกลายเป็นการต่อสตริง
+
+## Environment variables
+
+`.env.local` (ไม่ถูก commit) ต้องมี 3 ตัว:
+
+| ตัวแปร | หมายเหตุ |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL โปรเจกต์ |
+| `SUPABASE_SECRET_KEY` | secret/service_role key **ห้ามมี `NEXT_PUBLIC_`** |
+| `SESSION_SECRET` | สุ่มยาว ≥32 ตัวอักษร ใช้เซ็น session cookie |
+
+ค่าเดียวกันต้องไปตั้งเป็น Environment Variables บน Vercel ด้วย ไม่งั้น production จะขึ้นหน้า
+"ยังตั้งค่าระบบไม่ครบ" · ตัวอย่างชื่อตัวแปรอยู่ใน `.env.local.example`
 
 ## คำสั่ง
 
@@ -67,17 +130,26 @@ npm run build
 npm run lint
 ```
 
-## Deploy
+สร้าง bcrypt hash สำหรับ insert บัญชีแรกด้วยมือ:
+`node -e "require('bcryptjs').hash('รหัสผ่าน',10).then(console.log)"`
+
+## Git และ Deploy
+
+GitHub: https://github.com/momoj3/ExpenseDBAPP (branch `main`)
 
 Vercel team `rattanapon` · project `myexpense` · production https://myexpense-rattanapon.vercel.app
-
-โฟลเดอร์นี้**ไม่ใช่ git repo** จึง deploy ด้วยการส่งไฟล์ตรงขึ้น Vercel (`deploy_to_vercel`) ไม่ใช่ผ่าน
-git integration — ต้องส่ง source ทั้งชุดทุกครั้ง
-
-โปรเจกต์เปิด Vercel Authentication อยู่ URL จึงยัง redirect ไปหน้า login ของ Vercel ไม่ใช่เปิดสาธารณะ
+ยังไม่ได้เชื่อม git integration จึง deploy ด้วยการส่งไฟล์ตรง (`deploy_to_vercel`) — ต้องส่ง source
+ทั้งชุดทุกครั้ง · โปรเจกต์เปิด Vercel Authentication อยู่ URL จึงยัง redirect ไปหน้า login ของ Vercel
 
 ## ที่ทราบว่ายังไม่ถูก
 
 `today()` และ default month ใช้ `new Date().toISOString()` ซึ่งเป็นเวลา UTC ไม่ใช่เวลาไทย (UTC+7)
 ช่วงเที่ยงคืนถึง 07:00 ตามเวลาไทยจะได้วันที่ของ "เมื่อวาน" ทำให้ค่าเริ่มต้นในฟอร์มผิด และกฎ
 "ห้ามเป็นวันในอนาคต" ใน `validate.ts` อาจปฏิเสธรายการของวันนี้
+
+ESLint error ค้างอยู่ 1 จุดที่ `src/components/ExpenseForm.tsx:24` (`react-hooks/set-state-in-effect`)
+มีมาตั้งแต่ก่อนเพิ่มระบบ login ยังไม่แก้
+
+รีเซ็ตรหัสผ่านแล้ว **ไม่เตะ session เดิมทิ้งทันที** เพราะ session เป็น cookie ที่เซ็นแบบ stateless
+เจ้าของบัญชีที่กำลังใช้งานอยู่จะใช้ต่อได้จนครบ 30 นาทีหรือกด logout เอง ถ้าต้องการให้เด้งออกทันที
+ต้องเพิ่ม `password_changed_at` ใน `users` แล้วเทียบทุก action

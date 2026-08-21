@@ -6,7 +6,7 @@ import { validate, hasError, type Errors } from "@/lib/validate";
 import type { Expense } from "@/lib/types";
 
 type Props = {
-  onSave: (data: Omit<Expense, "id">, id?: number) => void | Promise<void>;
+  onSave: (data: Omit<Expense, "id" | "user_id" | "owner_name">, id?: number) => void | Promise<void>;
   editing?: Expense | null;
   onCancelEdit?: () => void;
 };
